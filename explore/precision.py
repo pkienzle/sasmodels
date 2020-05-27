@@ -105,6 +105,8 @@ class Comparator(object):
         *x_bits* is the precision with which the x values are specified.  The
         default 23 should reproduce the equivalent of a single precisio
         """
+        #show_single = True
+        show_single = False
         linear = not xrange.startswith("log")
         if xrange == "zoom":
             start, stop, steps = 1000, 1010, 2000
@@ -123,7 +125,6 @@ class Comparator(object):
             steps = int(parts[2]) if len(parts) > 2 else 400
             start = float(parts[0])
             stop = float(parts[1])
-
         else:
             raise ValueError("unknown range "+xrange)
         with mp.workprec(500):
@@ -135,23 +136,28 @@ class Comparator(object):
             if linear:
                 start = max(start, self.limits[0])
                 stop = min(stop, self.limits[1])
-                qrf = np.linspace(start, stop, steps, dtype='single')
-                #qrf = np.linspace(start, stop, steps, dtype='double')
+                if show_single:
+                    qrf = np.linspace(start, stop, steps, dtype='single')
+                else:
+                    qrf = np.linspace(start, stop, steps, dtype='double')
                 qr = [mp.mpf(float(v)) for v in qrf]
                 #qr = mp.linspace(start, stop, steps)
             else:
                 start = np.log10(max(10**start, self.limits[0]))
                 stop = np.log10(min(10**stop, self.limits[1]))
-                qrf = np.logspace(start, stop, steps, dtype='single')
-                #qrf = np.logspace(start, stop, steps, dtype='double')
+                if show_single:
+                    qrf = np.logspace(start, stop, steps, dtype='single')
+                else:
+                    qrf = np.logspace(start, stop, steps, dtype='double')
                 qr = [mp.mpf(float(v)) for v in qrf]
                 #qr = [10**v for v in mp.linspace(start, stop, steps)]
 
         target = self.call_mpmath(qr, bits=500)
-        pylab.subplot(121)
-        self.compare(qr, 'single', target, linear, diff)
-        pylab.legend(loc='best')
-        pylab.subplot(122)
+        if show_single:
+            pylab.subplot(121)
+            self.compare(qr, 'single', target, linear, diff)
+            pylab.legend(loc='best')
+            pylab.subplot(122)
         self.compare(qr, 'double', target, linear, diff)
         pylab.legend(loc='best')
         pylab.suptitle(self.name + " compared to 500-bit mpmath")
@@ -172,6 +178,10 @@ class Comparator(object):
         plotdiff(x, target, self.call_ocl(x, precision, 0), 'OpenCL '+precision, diff=diff)
         pylab.xlabel(self.xaxis)
         if diff == "relative":
+            ulp = 2**-23 if precision == 'single' else 2**-52
+            pylab.axhline(ulp/2, ls=':')
+            pylab.axhline(ulp, ls=':')
+            pylab.axhline(2*ulp, ls=':')
             pylab.ylabel("relative error")
         elif diff == "absolute":
             pylab.ylabel("absolute error")
@@ -228,7 +238,7 @@ def parse_extra_pars():
             pop.append(k+1)
     if pop:
         sys.argv = [v for k, v in enumerate(sys.argv) if k not in pop]
-        A = float(A_str)
+        A = float(A_str) if '.' in A_str else int(A_str)
 
 parse_extra_pars()
 
@@ -411,6 +421,28 @@ add_function(
     mp_function=lambda x: mp.fmod(x, 2*mp.pi),
     np_function=lambda x: np.fmod(x, 2*np.pi),
     ocl_function=make_ocl("return fmod(q, 2*M_PI);", "sas_fmod"),
+)
+# Tests on precision of the trapezoidal distribution moments.
+# Note: "a" is given as A=... on the command line via parse_extra_pars
+N = A if A > 1 else 20
+MP_ALPHA, NP_ALPHA, MP_BETA, NP_BETA = mp.mpf(1)/3, 1/3, mp.mpf(5)/6, 5/6
+MP_ALPHA = NP_ALPHA = 0
+add_function(
+    name="geom", # geometric series sum: (x^n - 1)/(x - 1)
+    #mp_function=lambda x, n=N: (x**n - 1)/(x - 1),
+    mp_function=lambda x, n=N: mp.polyval([1]*n, x),
+    #np_function=lambda x, n=N: (x**n - 1)/(x - 1),
+    np_function=lambda x, n=N: np.expm1(n*np.log(x))/(x-1),
+    #np_function=lambda x, n=N: np.polyval(np.ones(n), x),
+    ocl_function=make_ocl(f"return 1.000000000000000001*(pown(q, {N})-1.0)/(q-1.0);", "sas_geom"),
+)
+add_function(
+    name="dtrap", # trapezoidal distribution
+    #mp_function=lambda x, n=N: (x**n - 1)/(x - 1),
+    mp_function=lambda x, n=N, alpha=MP_ALPHA: 2*(mp.polyval([1]*n, x) - alpha**(n-1))/(1+x-alpha),
+    np_function=lambda x, n=N, alpha=NP_ALPHA: 2*(np.expm1(n*np.log(x))/(x-1) - np.array(alpha, dtype=x.dtype)**(n-1))/(1+x-np.array(alpha, dtype=x.dtype)),
+    #np_function=lambda x, n=N, alpha=NP_ALPHA: 2*((x**n-1)/(x-1) - np.array(alpha, dtype=x.dtype)**(n-1)),
+    ocl_function=make_ocl(f"return 2*((pown(q, {N})-1.0)/(q-1.0)-pown({NP_ALPHA}, {N-1}))/(1+q-{NP_ALPHA});", "sas_geom"),
 )
 add_function(
     name="gauss_coil",
@@ -682,6 +714,7 @@ where
             or [10^start, 10^stop] if stepping is "log" (default n=400)
 Some functions (notably gammainc/gammaincc) have an additional parameter A
 which can be set from the command line as A=value.  Default is A=1.
+Dotted lines represent 1/2 ulp, 1 ulp and 2 ulp precision levels.
 
 Name is one of:
     """+names)

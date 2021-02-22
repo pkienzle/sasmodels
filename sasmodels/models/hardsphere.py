@@ -178,7 +178,7 @@ def random():
     pars = dict(
         scale=1, background=0,
         radius_effective=10**np.random.uniform(1, 4),
-        volfraction=10**np.random.uniform(-2, 0),  # high volume fraction
+        volfraction=10**np.random.uniform(-1.5, -0.2),  # high volume fraction
     )
     return pars
 

@@ -771,7 +771,8 @@ def compare(opts, limits=None, maxdim=None):
             if opts['is2d'] and k > 0:
                 import matplotlib.pyplot as plt
                 plt.figure()
-            limits = plot_models(opts, result, limits=limits, setnum=k)
+            these = plot_models(opts, result, limits=None, setnum=k)
+            limits = these if limits is None else (min(limits[0], these[0]), max(limits[1], these[1]))
         if opts['show_weights']:
             base, _ = opts['engines']
             base_pars, _ = opts['pars']
@@ -797,6 +798,7 @@ def compare(opts, limits=None, maxdim=None):
                 pylab.legend()
     if opts['plot']:
         import matplotlib.pyplot as plt
+        plt.ylim(*limits)
         plt.show()
     return limits
 

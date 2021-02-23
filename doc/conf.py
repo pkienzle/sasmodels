@@ -55,6 +55,7 @@ nitpick_ignore = [
     ('py:class', 'module'),
     ('py:class', 'SesansData'),
     ('py:class', 'SourceModule'),
+    ('py:class', 'TestCondition'),
 ]
 
 # -- General configuration -----------------------------------------------------

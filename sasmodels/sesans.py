@@ -74,10 +74,11 @@ class SesansTransform(object):
         j0(H, out=H)
         H *= (dq * q / (2*pi)).reshape((-1, 1))
 
-        reptheta = np.outer(q, lam/(2*pi))
-        np.arcsin(reptheta, out=reptheta)
-        mask = reptheta > zaccept
-        H[mask] = 0
+        # TODO re-enable masking!!!
+        #reptheta = np.outer(q, lam/(2*pi))
+        #np.arcsin(reptheta, out=reptheta)
+        #mask = reptheta > zaccept
+        #H[mask] = 0
 
         self.q_calc = q
         self._H, self._H0 = H, H0

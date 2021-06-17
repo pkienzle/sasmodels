@@ -64,7 +64,9 @@ def load_data(filename, index=0):
     if not isinstance(datasets, list):
         datasets = [datasets]
     for data in datasets:
-        if hasattr(data, 'x'):
+        if getattr(data, 'isSesans', False):
+            pass
+        elif hasattr(data, 'x'):
             data.qmin, data.qmax = data.x.min(), data.x.max()
             data.mask = (np.isnan(data.y) if data.y is not None
                          else np.zeros_like(data.x, dtype='bool'))
@@ -112,6 +114,11 @@ def set_top(data, cutoff):
     data.mask += \
         Boxcut(x_min=-np.inf, x_max=np.inf, y_min=-np.inf, y_max=cutoff)(data)
 
+
+class Source:
+    ...
+class Sample:
+    ...
 
 class Data1D(object):
     """
@@ -298,6 +305,25 @@ class Sample(object):
         # type: () -> None
         pass
 
+def empty_sesans(z, wavelength=None, zacceptance=None):
+    data = SesansData(x=z, y=None, dx=None, dy=None)
+    data.filename = "fake data"
+    DEFAULT_WAVELENGTH = 5
+    if wavelength is None:
+        wavelength = DEFAULT_WAVELENGTH
+    if np.isscalar(wavelength):
+        wavelength = np.full_like(z, wavelength)
+    if zacceptance is None:
+        zacceptance = (90., 'degrees')
+    source = Source()
+    source.wavelength = wavelength
+    source.wavelength_unit = "A"
+    sample = Sample()
+    sample.zacceptance = zacceptance
+    data.source = source
+    data.sample = sample
+    return data
+
 def empty_data1D(q, resolution=0.0, L=0., dL=0.):
     # type: (np.ndarray, float, float, float) -> Data1D
     r"""
@@ -411,10 +437,12 @@ def plot_theory(data, theory, resid=None, view=None, use_data=True,
     *use_data* is True if the data should be plotted as well as the theory.
 
     *limits* sets the intensity limits on the plot; if None then the limits
-    are inferred from the data.
+    are inferred from the data. If (-inf, inf) then use auto limits.
 
     *Iq_calc* is the raw theory values without resolution smearing
     """
+    if limits is not None and np.isinf(limits[0]):
+        limits = None
     if hasattr(data, 'isSesans') and data.isSesans:
         _plot_result_sesans(data, theory, resid, use_data=True, limits=limits)
     elif hasattr(data, 'qx_data') and not getattr(data, 'radial', False):
@@ -554,6 +582,9 @@ def _plot_result_sesans(data, theory, resid, use_data, limits=None):
     use_resid = resid is not None
     num_plots = (use_data or use_theory) + use_resid
 
+    if theory is not None:
+        offset, scale = theory[-1], theory[0] - theory[-1]
+
     if use_data or use_theory:
         is_tof = data.lam is not None and (data.lam != data.lam[0]).any()
         if num_plots > 1:
@@ -563,12 +594,14 @@ def _plot_result_sesans(data, theory, resid, use_data, limits=None):
                 plt.errorbar(data.x, np.log(data.y)/(data.lam*data.lam),
                              yerr=data.dy/data.y/(data.lam*data.lam))
             else:
-                plt.errorbar(data.x, data.y, yerr=data.dy)
+                #plt.errorbar(data.x, data.y, yerr=data.dy)
+                plt.errorbar(data.x, (data.y-offset)/scale, yerr=data.dy/scale)
         if theory is not None:
             if is_tof:
                 plt.plot(data.x, np.log(theory)/(data.lam*data.lam), '-')
             else:
-                plt.plot(data.x, theory, '-')
+                #plt.plot(data.x, theory, '-')
+                plt.plot(data.x, (theory-offset)/scale, '-')
         if limits is not None:
             plt.ylim(*limits)
 
@@ -577,6 +610,7 @@ def _plot_result_sesans(data, theory, resid, use_data, limits=None):
             plt.ylabel(r'(Log (P/P$_0$))/$\lambda^2$')
         else:
             plt.ylabel('polarization (P/P0)')
+        plt.xscale('log')
 
 
     if resid is not None:
@@ -585,6 +619,7 @@ def _plot_result_sesans(data, theory, resid, use_data, limits=None):
         plt.plot(data.x, resid, 'x')
         plt.xlabel('spin echo length ({})'.format(data._xunit))
         plt.ylabel('residuals (P/P0)')
+        plt.xscale('log')
 
 
 @protect

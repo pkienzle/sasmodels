@@ -42,7 +42,7 @@ from . import weights
 from . import kerneldll
 from . import kernelcl
 from . import kernelcuda
-from .data import plot_theory, empty_data1D, empty_data2D, load_data
+from .data import plot_theory, empty_data1D, empty_data2D, empty_sesans, load_data
 from .direct_model import DirectModel, get_mesh
 from .generate import FLOAT_RE, set_integration_size
 
@@ -680,7 +680,7 @@ def make_data(opts):
     Generate an empty dataset, used with the model to set Q points
     and resolution.
 
-    *opts* contains the options, with 'qmax', 'nq', 'res',
+    *opts* contains the options, with 'qmax', 'nq', 'sesans', 'res',
     'accuracy', 'is2d' and 'view' parsed from the command line.
     """
     qmin, qmax, nq, res = opts['qmin'], opts['qmax'], opts['nq'], opts['res']
@@ -690,6 +690,13 @@ def make_data(opts):
         data.accuracy = opts['accuracy']
         set_beam_stop(data, qmin)
         index = ~data.mask
+    elif opts['sesans']:
+        if opts['view'] == 'log':
+            z = np.logspace(-math.log10(qmax), -math.log10(qmin), nq)
+        else:
+            z = np.linspace(1/qmax, 1/qmin, nq)
+        data = empty_sesans(z)
+        index = slice(None, None)
     else:
         if opts['view'] == 'log' and not opts['zero']:
             q = np.logspace(math.log10(qmin), math.log10(qmax), nq)
@@ -754,6 +761,9 @@ def compare(opts, limits=None, maxdim=None):
 
     *maxdim* **DEPRECATED** Use opts['maxdim'] instead.
     """
+    if opts['sesans']:
+        limits = (-np.inf, np.inf)
+
     # CRUFT: remove maxdim parameter
     if maxdim is not None:
         opts['maxdim'] = maxdim
@@ -771,8 +781,7 @@ def compare(opts, limits=None, maxdim=None):
             if opts['is2d'] and k > 0:
                 import matplotlib.pyplot as plt
                 plt.figure()
-            these = plot_models(opts, result, limits=None, setnum=k)
-            limits = these if limits is None else (min(limits[0], these[0]), max(limits[1], these[1]))
+            limits = plot_models(opts, result, limits=limits, setnum=k)
         if opts['show_weights']:
             base, _ = opts['engines']
             base_pars, _ = opts['pars']
@@ -798,7 +807,6 @@ def compare(opts, limits=None, maxdim=None):
                 pylab.legend()
     if opts['plot']:
         import matplotlib.pyplot as plt
-        plt.ylim(*limits)
         plt.show()
     return limits
 
@@ -1011,7 +1019,7 @@ OPTIONS = [
     # Data generation
     'data=', 'noise=', 'res=', 'nq=', 'q=',
     'lowq', 'midq', 'highq', 'exq', 'zero',
-    '2d', '1d',
+    '2d', '1d', 'sesans',
 
     # Parameter set
     'preset', 'random', 'random=', 'sets=',
@@ -1171,6 +1179,7 @@ def parse_opts(argv):
         'qmin'      : None,
         'qmax'      : 0.05,
         'nq'        : 128,
+        'sesans'    : False,
         'res'       : '0.0',
         'noise'     : 0.0,
         'accuracy'  : 'Low',
@@ -1208,6 +1217,7 @@ def parse_opts(argv):
         elif arg == '-highq':   opts['qmax'] = 1.0
         elif arg == '-midq':    opts['qmax'] = 0.2
         elif arg == '-lowq':    opts['qmax'] = 0.05
+        elif arg == '-sesans':  opts['sesans'] = True
         elif arg == '-zero':    opts['zero'] = True
         elif arg.startswith('-nq='):       opts['nq'] = int(arg[4:])
         elif arg.startswith('-q='):

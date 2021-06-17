@@ -99,6 +99,8 @@ except ImportError:
     pass
 # pylint: enable=unused-import
 
+# TODO: fix problem with mac OpenCL
+SAS_OPENCL_DEFAULT = "None" if sys.platform == "darwin" else "OpenCL"
 
 # CRUFT: pyopencl < 2017.1 (as of June 2016 needs quotes around include path).
 def quote_path(v):
@@ -155,7 +157,7 @@ _F64_PRAGMA = """\
 def use_opencl():
     # type: () -> bool
     """Return True if OpenCL is the default computational engine"""
-    sas_opencl = os.environ.get("SAS_OPENCL", "OpenCL").lower()
+    sas_opencl = os.environ.get("SAS_OPENCL", SAS_OPENCL_DEFAULT).lower()
     return HAVE_OPENCL and sas_opencl != "none" and not sas_opencl.startswith("cuda")
 
 
@@ -325,7 +327,7 @@ def _create_some_context():
     which one (and not a CUDA device, or no GPU).
     """
     # Assume we do not get here if SAS_OPENCL is None or CUDA.
-    sas_opencl = os.environ.get('SAS_OPENCL', 'opencl')
+    sas_opencl = os.environ.get('SAS_OPENCL', 'OpenCL')
     if sas_opencl.lower() != 'opencl':
         # Setting PYOPENCL_CTX as a SAS_OPENCL to create cl context.
         os.environ["PYOPENCL_CTX"] = sas_opencl
